@@ -5,6 +5,11 @@ Node.js directamente desde un repositorio Git: clona el código, instala
 dependencias, ejecuta el build y mantiene el proceso vivo. No hace falta
 subir un ZIP ni usar SSH.
 
+> **Requisito de AI App Hosting:** usa contenedores Podman y el servidor
+> debe permitir user namespaces (`user.max_user_namespaces > 0`). Si el
+> deploy falla con `ea-podman requires user namespaces`, usa la
+> **sección 6 (Setup Node.js App / Passenger)**, que no usa contenedores.
+
 Este proyecto ya está preparado:
 
 - `server.js` escucha el puerto que cPanel asigna (`process.env.PORT`).
@@ -158,29 +163,89 @@ reescriba el historial rompe el redeploy; evítalo.
 | El build se queda sin memoria | Contacta al proveedor o limita el build; cPanel ejecuta la app en un contenedor con recursos limitados. |
 | Sigue sirviendo código viejo | Falta **Redeploy** después del push. |
 | `PORT` inválido | No definas `PORT` en App Env; cPanel lo gestiona. |
+| `ea-podman requires user namespaces` / `user.max_user_namespaces is 0` | El servidor no permite contenedores. Usa la sección 6 (Passenger) o pide al proveedor que habilite `user.max_user_namespaces=15000`. |
 
 ---
 
-## 6. Alternativa manual (sin AI App Hosting)
+## 6. Alternativa sin contenedores: Setup Node.js App (Passenger)
 
-Si tu cPanel no tiene **Websites & Apps → AI App Hosting**, puedes usar
-**Setup Node.js App** con Passenger:
+Úsala si AI App Hosting falla por los user namespaces de Podman o si tu
+cPanel no tiene esa opción. Passenger sirve la app desde el propio
+servidor, sin contenedores.
 
-1. Sube el proyecto a una carpeta fuera de `public_html` (por ZIP o
-   Git Version Control).
-2. Crea la app con Node 20/22, modo **Production**, startup file
-   `server.js` y la URL del dominio.
-3. Configura las variables de entorno y ejecuta, por SSH:
+### 6.1 Clonar el repositorio
 
-   ```bash
-   source /home/TU_USUARIO/nodevenv/wacrm/20/bin/activate
-   cd ~/wacrm
-   npm ci --include=dev
-   npm run build
-   ```
+cPanel → **Git Version Control** → **Create** → **Clone a Repository**:
 
-4. Reinicia la app desde cPanel. `server.js` escucha el `PORT` que
-   Passenger le asigna.
+| Campo | Valor |
+|---|---|
+| Clone URL | `https://github.com/TU-USUARIO/wacrm.git` |
+| Repository Path | `wacrm` |
+| Branch | `main` |
 
-En este modo el build se hace en el servidor: si el plan se queda sin
-memoria, compila en local y sube `.next` junto con `node_modules`.
+Queda en `/home/TU_USUARIO/wacrm`.
+
+### 6.2 Crear la aplicación
+
+cPanel → **Setup Node.js App** → **Create Application**:
+
+| Campo | Valor |
+|---|---|
+| Node.js version | 20.x o 22.x |
+| Application mode | **Production** |
+| Application root | `wacrm` |
+| Application URL | tu dominio |
+| Application startup file | `server.js` |
+
+### 6.3 Variables de entorno (antes del build)
+
+Las `NEXT_PUBLIC_*` se incrustan en el bundle durante el build. Crea
+`.env.production` en la raíz del repo desde el Administrador de archivos:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://TU-PROYECTO.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+ENCRYPTION_KEY=...
+META_APP_SECRET=...
+NEXT_PUBLIC_SITE_URL=https://TU-DOMINIO
+NEXT_PUBLIC_APP_LOCALE=en
+```
+
+```bash
+chmod 600 .env.production
+```
+
+No se commitea: `.gitignore` excluye `.env*`.
+
+### 6.4 Instalar y compilar
+
+Por SSH/Terminal:
+
+```bash
+source /home/TU_USUARIO/nodevenv/wacrm/22/bin/activate
+cd ~/wacrm
+npm ci --include=dev
+npm run build
+```
+
+El `.npmrc` del repo ya fuerza `include=dev`, así que el botón **Run NPM
+Install** de cPanel también instala TypeScript/Tailwind.
+
+> Sin SSH/Terminal no se puede ejecutar `next build` desde el
+> Administrador de archivos. Pide al proveedor que habilite SSH o
+> Terminal.
+
+### 6.5 Reiniciar y verificar
+
+cPanel → Setup Node.js App → **Restart**. En los logs debe aparecer:
+
+```text
+> wacrm ready on port XXXXX (production)
+```
+
+Tras cada `git push`: Git Version Control → **Update from Remote**,
+repetir `npm ci --include=dev && npm run build` y **Restart**.
+
+Si el plan se queda sin memoria durante el build, compila en local y
+sube `.next` junto con `node_modules`.
