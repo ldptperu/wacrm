@@ -39,6 +39,8 @@ ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+# next.config.ts emits `.next/standalone` only when this is set.
+ENV BUILD_STANDALONE=1
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

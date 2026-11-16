@@ -65,12 +65,17 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   /**
-   * Self-contained production build. Emits `.next/standalone` with a
-   * minimal `server.js` and only the traced `node_modules`, so the
-   * Docker runtime image needs no `npm install` and stays small.
-   * See the Dockerfile.
+   * Self-contained production build for containers. Emits
+   * `.next/standalone` with a minimal `server.js` and only the traced
+   * `node_modules`, so the Docker runtime image needs no `npm install`
+   * and stays small.
+   *
+   * Off by default: Next.js cannot combine standalone output with the
+   * project's own `server.js` (used by cPanel/Passenger and `npm start`),
+   * and cPanel builds don't need the extra traced copy. The Dockerfile
+   * opts in with `BUILD_STANDALONE=1`.
    */
-  output: "standalone",
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
 
   /**
    * Cross-origin dev access (Next.js 16).
