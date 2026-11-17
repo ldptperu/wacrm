@@ -2,12 +2,14 @@
  * cPanel build helper for accounts without SSH/Terminal.
  *
  * Usage:
- *   1. Setup Node.js App → Run NPM Install (installs dependencies).
- *   2. Setup Node.js App → Run JS script → select `cpanel-build.js`.
- *   3. Wait for "BUILD_OK"; then click Restart.
+ *   1. Setup Node.js App → Run JS script → select `cpanel-build.js`.
+ *   2. Wait for "BUILD_OK".
+ *   3. Click Restart.
  *
- * The script installs dev dependencies if they are missing (Next.js needs
- * TypeScript/Tailwind to build) and runs `npm run build`.
+ * cPanel's ZIP deployment ships a `.npmrc` with `omit=dev`, so only
+ * production and build dependencies are installed. The tooling
+ * (eslint, vitest, supabase CLI, prettier) stays out to keep the
+ * install under the account's memory limit.
  */
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -26,24 +28,23 @@ function log(message) {
   }
 }
 
-function runNode(args) {
-  const env = {
+function childEnv(memoryMb) {
+  return {
     ...process.env,
     NODE_ENV: "production",
-    NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=2048",
+    npm_config_omit: "dev",
+    npm_config_audit: "false",
+    npm_config_fund: "false",
+    NODE_OPTIONS: process.env.NODE_OPTIONS || `--max-old-space-size=${memoryMb}`,
   };
+}
 
-  const result = spawnSync(process.execPath, args, {
-    cwd: appRoot,
-    stdio: "inherit",
-    env,
-  });
-
+function fail(result, label) {
   if (result.error) {
     throw result.error;
   }
   if (result.status !== 0) {
-    const error = new Error(`El comando terminó con código ${result.status}`);
+    const error = new Error(`${label} terminó con código ${result.status}`);
     error.status = result.status;
     throw error;
   }
@@ -64,73 +65,68 @@ function findNpmBin() {
   return fs.existsSync(candidate) ? candidate : null;
 }
 
-function npm(args, label) {
+function npm(args, label, memoryMb) {
   log(label);
+  const env = childEnv(memoryMb);
   const npmCli = findNpmCli();
+
   if (npmCli) {
-    runNode([npmCli, ...args]);
+    fail(
+      spawnSync(process.execPath, [npmCli, ...args], {
+        cwd: appRoot,
+        stdio: "inherit",
+        env,
+      }),
+      label
+    );
     return;
   }
 
   const npmBin = findNpmBin();
   if (npmBin) {
-    const result = spawnSync(npmBin, args, {
-      cwd: appRoot,
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        NODE_ENV: "production",
-        NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=2048",
-      },
-    });
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      const error = new Error(`npm terminó con código ${result.status}`);
-      error.status = result.status;
-      throw error;
-    }
+    fail(
+      spawnSync(npmBin, args, { cwd: appRoot, stdio: "inherit", env }),
+      label
+    );
     return;
   }
 
-  // Fallback when npm is only available through PATH.
-  const result = spawnSync("npm", args, {
-    cwd: appRoot,
-    stdio: "inherit",
-    shell: process.platform === "win32",
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=2048",
-    },
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const error = new Error(`npm terminó con código ${result.status}`);
-    error.status = result.status;
-    throw error;
-  }
+  fail(
+    spawnSync("npm", args, {
+      cwd: appRoot,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      env,
+    }),
+    label
+  );
+}
+
+function hasModule(name) {
+  return fs.existsSync(
+    path.join(appRoot, "node_modules", ...name.split("/"), "package.json")
+  );
 }
 
 try {
   log(`Node ${process.version}`);
   log(`Directorio de la aplicación: ${appRoot}`);
-  log(`NODE_ENV=${process.env.NODE_ENV || "(sin definir)"}`);
 
-  const hasNext = fs.existsSync(path.join(appRoot, "node_modules", "next", "package.json"));
-  const hasTypescript = fs.existsSync(
-    path.join(appRoot, "node_modules", "typescript", "package.json")
-  );
+  const missing = ["next", "react", "react-dom", "typescript", "@tailwindcss/postcss"]
+    .filter((name) => !hasModule(name));
 
-  if (!hasNext || !hasTypescript) {
+  if (missing.length > 0) {
+    log(`Faltan dependencias (${missing.join(", ")}). Instalando producción + build...`);
     npm(
-      ["install", "--include=dev", "--no-audit", "--no-fund"],
-      "Faltan dependencias; ejecutando npm install --include=dev..."
+      ["install", "--omit=dev", "--no-audit", "--no-fund", "--maxsockets", "2"],
+      "Ejecutando npm install --omit=dev...",
+      768
     );
   } else {
-    log("Dependencias presentes; se omite npm install.");
+    log("Dependencias de producción y build presentes; se omite npm install.");
   }
 
-  npm(["run", "build"], "Compilando Next.js (npm run build)...");
+  npm(["run", "build"], "Compilando Next.js (npm run build)...", 2048);
 
   // Ask Passenger to reload on the next request when supported.
   try {

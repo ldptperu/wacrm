@@ -220,28 +220,35 @@ No se commitea: `.gitignore` excluye `.env*`.
 
 ### 6.4 Instalar y compilar
 
+El ZIP incluye un `.npmrc` con `omit=dev`: cPanel instala solo las
+dependencias de producción y las necesarias para compilar (TypeScript,
+Tailwind y `@types`). El tooling de desarrollo (`eslint`, `vitest`,
+`supabase` CLI, `prettier`) no se instala en cPanel para no agotar la
+memoria del plan.
+
 #### Con SSH/Terminal
 
 ```bash
 source /home/TU_USUARIO/nodevenv/wacrm-app/22/bin/activate
 cd ~/wacrm-app
-npm ci --include=dev
+npm ci --omit=dev
 npm run build
 ```
 
-El `.npmrc` del repo ya fuerza `include=dev`, así que el botón **Run NPM
-Install** de cPanel también instala TypeScript/Tailwind.
+#### Sin SSH/Terminal (Run JS script)
 
-#### Sin SSH/Terminal (Run NPM Install + Run JS script)
-
-1. En **Setup Node.js App**, pulsa **Run NPM Install** y espera a que termine.
-2. Comprueba que `cpanel-build.js` esté en la raíz de la app (viene en el ZIP).
-3. Pulsa **Run JS script** y selecciona `cpanel-build.js`.
-4. Espera 1–3 minutos. El script instala las dependencias de desarrollo
-   si faltan y ejecuta `next build`.
-5. Busca `BUILD_OK` en la salida. Si la ventana corta el texto, descarga
+1. Comprueba que `cpanel-build.js` esté en la raíz de la app (viene en el ZIP).
+2. Pulsa **Run JS script** y selecciona `cpanel-build.js`.
+3. Espera 2–5 minutos. El script instala producción + build si faltan
+   dependencias y ejecuta `next build`.
+4. Busca `BUILD_OK` en la salida. Si la ventana corta el texto, descarga
    `cpanel-build.log` de la raíz de la app.
-6. Pulsa **Restart** en Setup Node.js App.
+5. Pulsa **Restart** en Setup Node.js App.
+
+**Run NPM Install** también funciona ahora (instala solo producción +
+build), pero si vuelve a dar `Killed`, usa directamente **Run JS script**:
+el script reintenta la instalación con menos concurrencia y menos heap de
+Node.
 
 Si **Run JS script** se corta por tiempo de espera, programa un cron
 puntual (y bórralo después de ejecutarse):
@@ -259,7 +266,7 @@ cPanel → Setup Node.js App → **Restart**. En los logs debe aparecer:
 ```
 
 Tras cada `git push`: Git Version Control → **Update from Remote**,
-repetir `npm ci --include=dev && npm run build` y **Restart**.
+repetir `npm ci --omit=dev && npm run build` y **Restart**.
 
 Si el plan se queda sin memoria durante el build, compila en local y
 sube `.next` junto con `node_modules`.
