@@ -180,10 +180,10 @@ cPanel → **Git Version Control** → **Create** → **Clone a Repository**:
 | Campo | Valor |
 |---|---|
 | Clone URL | `https://github.com/TU-USUARIO/wacrm.git` |
-| Repository Path | `wacrm` |
+| Repository Path | `wacrm-app` |
 | Branch | `main` |
 
-Queda en `/home/TU_USUARIO/wacrm`.
+Queda en `/home/TU_USUARIO/wacrm-app`.
 
 ### 6.2 Crear la aplicación
 
@@ -193,7 +193,7 @@ cPanel → **Setup Node.js App** → **Create Application**:
 |---|---|
 | Node.js version | 20.x o 22.x |
 | Application mode | **Production** |
-| Application root | `wacrm` |
+| Application root | `wacrm-app` |
 | Application URL | tu dominio |
 | Application startup file | `server.js` |
 
@@ -220,11 +220,11 @@ No se commitea: `.gitignore` excluye `.env*`.
 
 ### 6.4 Instalar y compilar
 
-Por SSH/Terminal:
+#### Con SSH/Terminal
 
 ```bash
-source /home/TU_USUARIO/nodevenv/wacrm/22/bin/activate
-cd ~/wacrm
+source /home/TU_USUARIO/nodevenv/wacrm-app/22/bin/activate
+cd ~/wacrm-app
 npm ci --include=dev
 npm run build
 ```
@@ -232,9 +232,23 @@ npm run build
 El `.npmrc` del repo ya fuerza `include=dev`, así que el botón **Run NPM
 Install** de cPanel también instala TypeScript/Tailwind.
 
-> Sin SSH/Terminal no se puede ejecutar `next build` desde el
-> Administrador de archivos. Pide al proveedor que habilite SSH o
-> Terminal.
+#### Sin SSH/Terminal (Run NPM Install + Run JS script)
+
+1. En **Setup Node.js App**, pulsa **Run NPM Install** y espera a que termine.
+2. Comprueba que `cpanel-build.js` esté en la raíz de la app (viene en el ZIP).
+3. Pulsa **Run JS script** y selecciona `cpanel-build.js`.
+4. Espera 1–3 minutos. El script instala las dependencias de desarrollo
+   si faltan y ejecuta `next build`.
+5. Busca `BUILD_OK` en la salida. Si la ventana corta el texto, descarga
+   `cpanel-build.log` de la raíz de la app.
+6. Pulsa **Restart** en Setup Node.js App.
+
+Si **Run JS script** se corta por tiempo de espera, programa un cron
+puntual (y bórralo después de ejecutarse):
+
+```bash
+/home/TU_USUARIO/nodevenv/wacrm-app/22/bin/node /home/TU_USUARIO/wacrm-app/cpanel-build.js >> /home/TU_USUARIO/wacrm-app/cpanel-build.log 2>&1
+```
 
 ### 6.5 Reiniciar y verificar
 

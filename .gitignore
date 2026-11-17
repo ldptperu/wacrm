@@ -46,3 +46,6 @@ next-env.d.ts
 # local deployment artifacts
 *.zip
 *.log
+
+# cPanel/Passenger restart marker
+/tmp/
