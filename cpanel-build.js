@@ -112,8 +112,18 @@ try {
   log(`Node ${process.version}`);
   log(`Directorio de la aplicación: ${appRoot}`);
 
-  const missing = ["next", "react", "react-dom", "typescript", "@tailwindcss/postcss"]
-    .filter((name) => !hasModule(name));
+  const missing = [
+    "next",
+    "react",
+    "react-dom",
+    "typescript",
+    "tailwindcss",
+    "@tailwindcss/postcss",
+    "shadcn",
+    "@types/node",
+    "@types/react",
+    "@types/react-dom",
+  ].filter((name) => !hasModule(name));
 
   if (missing.length > 0) {
     log(`Faltan dependencias (${missing.join(", ")}). Instalando producción + build...`);
